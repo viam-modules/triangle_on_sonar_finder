@@ -28,6 +28,12 @@ ifeq ($(VIAM_TARGET_OS), windows)
 	git checkout meta.json
 endif
 
+test: setup
+	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
+	GO_BUILD_FLAGS := -tags no_cgo	
+	MODULE_BINARY = bin/viam-hough-transform.ex
+	go test -v ./triangle_on_sonar_finder -run TestTriangleOnSonarFinde
+
 module: module.tar.gz
 
 setup:
