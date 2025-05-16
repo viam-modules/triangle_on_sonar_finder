@@ -19,6 +19,6 @@
       "windows/amd64"
     ]
   },
-  "entrypoint": "triangle_on_sonar_finder",
+  "entrypoint": "triangle_finder",
   "first_run": ""
 }
