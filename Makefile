@@ -16,7 +16,7 @@ $(MODULE_BINARY): Makefile
 	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/main.go
 
 module.tar.gz: meta.json $(MODULE_BINARY)
-	tar czf $@ meta.json $(MODULE_BINARY) 
+	tar czf $@ meta.json $(MODULE_BINARY) templates
 	git checkout meta.json
 
 ifeq ($(VIAM_TARGET_OS), windows)
