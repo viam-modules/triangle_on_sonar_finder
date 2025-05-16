@@ -26,7 +26,7 @@ module.tar.gz: strip-module
 endif
 
 strip-module: 
-	strip filtered-camera
+	strip $(MODULE_BINARY)
 
 # TODO: Remove when viamrobotics/rdk#4969 is deployed
 fix-meta-for-win:
