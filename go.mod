@@ -8,7 +8,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	go.viam.com/rdk v0.73.0
 	go.viam.com/test v1.2.4
-	gocv.io/x/gocv v0.41.0
 )
 
 require (

@@ -2,6 +2,7 @@ package triangle_on_sonar_finder
 
 import (
 	"context"
+	"sort"
 
 	"image"
 
@@ -14,7 +15,6 @@ import (
 	"go.viam.com/rdk/vision/classification"
 	objdet "go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/rdk/vision/viscapture"
-	"gocv.io/x/gocv"
 )
 
 const (
@@ -52,11 +52,11 @@ func (cfg TriangleFinderConfig) Validate(path string) ([]string, error) {
 type myTriangleFinder struct {
 	resource.AlwaysRebuild
 
-	name           resource.Name
-	logger         logging.Logger
-	cam            camera.Camera
-	config         *TriangleFinderConfig
-	templateImages []gocv.Mat
+	name      resource.Name
+	logger    logging.Logger
+	cam       camera.Camera
+	config    *TriangleFinderConfig
+	templates []TemplateFromImage
 }
 
 func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf resource.Config, logger logging.Logger) (vision.Service, error) {
@@ -77,13 +77,13 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 	}
 
 	// load template images
-	tf.templateImages, err = loadTemplates(newConf.PathToTemplatesDirectory)
+	tf.templates, err = loadTemplates(newConf.PathToTemplatesDirectory)
 	if err != nil {
 		return nil, errors.Errorf("failed to load template images for %s got: %s", ModelName, err)
 	}
 
-	if len(tf.templateImages) == 0 {
-		return nil, errors.Errorf("no valid template images found in %s", newConf.PathToTemplatesDirectory)
+	if len(tf.templates) == 0 {
+		return nil, errors.Errorf("no valid template found in %s", newConf.PathToTemplatesDirectory)
 	}
 	return tf, nil
 }
@@ -100,59 +100,79 @@ func (tf *myTriangleFinder) GetProperties(ctx context.Context, extra map[string]
 	}, nil
 }
 
-// getAndDecodeImage captures an image from the camera and decodes it into a gocv.Mat.
-// It returns the decoded image as a grayscale gocv.Mat.
-func (tf *myTriangleFinder) getAndDecodeImage(ctx context.Context) (gocv.Mat, error) {
-	// Default mime type and extra parameters
-	mimeType := "image/jpeg"
-	imageBytes, _, err := tf.cam.Image(ctx, mimeType, nil)
-	if err != nil {
-		return gocv.Mat{}, errors.Errorf("failed to capture image from camera for %s got: %s", ModelName, err)
+// calculateIoU calculates the Intersection over Union between two rectangles
+func calculateIoU(box1, box2 *image.Rectangle) float64 {
+	if box1 == nil || box2 == nil {
+		return 0
 	}
 
-	img, err := gocv.IMDecode(imageBytes, gocv.IMReadGrayScale)
-	if err != nil {
-		return gocv.Mat{}, errors.Errorf("failed to decode image for %s got: %s", ModelName, err)
+	// Calculate intersection rectangle
+	intersection := box1.Intersect(*box2)
+	if intersection.Empty() {
+		return 0
 	}
 
-	if img.Empty() {
-		return gocv.Mat{}, errors.New("decoded image is empty")
-	}
+	// Calculate areas
+	intersectionArea := intersection.Dx() * intersection.Dy()
+	box1Area := box1.Dx() * box1.Dy()
+	box2Area := box2.Dx() * box2.Dy()
 
-	return img, nil
+	// Calculate IoU
+	unionArea := box1Area + box2Area - intersectionArea
+	return float64(intersectionArea) / float64(unionArea)
 }
 
-func (tf *myTriangleFinder) getGreyScaleMat(img image.Image) (gocv.Mat, error) {
-	grayImg, ok := img.(*image.Gray)
-	if !ok {
-		// If not already grayscale, convert to grayscale
-		bounds := img.Bounds()
-		grayImg = image.NewGray(bounds)
-		for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-			for x := bounds.Min.X; x < bounds.Max.X; x++ {
-				grayImg.Set(x, y, img.At(x, y))
+func (tf *myTriangleFinder) findTriangle(imgMatrix [][]float32) []objdet.Detection {
+	// Find matches using all templates
+	var allMatches []Match
+	for _, template := range tf.templates {
+		matches := template.FindMatch(imgMatrix, 2, tf.config.Threshold) //TODO: stride configurable
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Convert matches to detections
+	detections := make([]objdet.Detection, 0, len(allMatches))
+	for _, match := range allMatches {
+		box := match.GetBoundingBox()
+		det := objdet.NewDetectionWithoutImgBounds(box, float64(match.Score), "triangle")
+		detections = append(detections, det)
+	}
+
+	// Sort detections by score in descending order
+	sort.Slice(detections, func(i, j int) bool {
+		return detections[i].Score() > detections[j].Score()
+	})
+
+	// Apply Non-Maximum Suppression
+	var filteredDetections []objdet.Detection
+	used := make([]bool, len(detections))
+
+	for i := 0; i < len(detections); i++ {
+		if used[i] {
+			continue
+		}
+
+		// Keep the current detection
+		filteredDetections = append(filteredDetections, detections[i])
+		used[i] = true
+
+		// Check overlap with remaining detections
+		for j := i + 1; j < len(detections); j++ {
+			if used[j] {
+				continue
+			}
+
+			// Calculate IoU between current and remaining detection
+			iou := calculateIoU(detections[i].BoundingBox(), detections[j].BoundingBox())
+
+			// If IoU is greater than threshold, mark as used
+			if iou > 0.3 { // You can adjust this threshold
+				used[j] = true
 			}
 		}
 	}
-	mat, err := gocv.ImageGrayToMatGray(grayImg)
-	if err != nil {
-		return gocv.Mat{}, errors.Errorf("failed to convert image to grayscale mat: %s", err)
-	}
-	if mat.Empty() {
-		return gocv.Mat{}, errors.New("converted grayscale mat is empty")
-	}
-	return mat, nil
-}
 
-func (tf *myTriangleFinder) findTriangle(img gocv.Mat) []objdet.Detection {
-	// Use template matching to find triangles in the image and return detections.
-	boxes := FindMatchingPatterns(img, tf.templateImages, tf.config.Threshold)
-	detections := make([]objdet.Detection, 0, len(boxes))
-	for _, box := range boxes {
-		det := objdet.NewDetectionWithoutImgBounds(box, 1.0, "triangle")
-		detections = append(detections, det)
-	}
-	return detections
+	return filteredDetections
 }
 
 func (tf *myTriangleFinder) DetectionsFromCamera(
@@ -160,21 +180,20 @@ func (tf *myTriangleFinder) DetectionsFromCamera(
 	cameraName string,
 	extra map[string]interface{},
 ) ([]objdet.Detection, error) {
-	img, err := tf.getAndDecodeImage(ctx)
+	mimeType := "image/jpeg"
+	image, err := camera.DecodeImageFromCamera(ctx, mimeType, nil, tf.cam)
 	if err != nil {
 		return nil, errors.Errorf("failed to get and decode image for %s got: %s", ModelName, err)
 	}
-	return tf.findTriangle(img), nil
+
+	imgMatrix := ImageToMatrix(image)
+	return tf.findTriangle(imgMatrix), nil
 }
 
 func (tf *myTriangleFinder) Detections(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objdet.Detection, error) {
-	mat, err := tf.getGreyScaleMat(img)
-	if err != nil {
-		return nil, errors.Errorf("failed to get grey scale mat for %s got: %s", ModelName, err)
-	}
-
+	// Convert image to grayscale
+	mat := ImageToMatrix(img)
 	return tf.findTriangle(mat), nil
-
 }
 
 func (tf *myTriangleFinder) Classifications(ctx context.Context, img image.Image,
@@ -206,7 +225,6 @@ func (tf *myTriangleFinder) CaptureAllFromCamera(
 	opt viscapture.CaptureOptions,
 	extra map[string]interface{},
 ) (viscapture.VisCapture, error) {
-	tf.logger.Errorw("REACHING HERE")
 	res := viscapture.VisCapture{}
 	mimeType := "image/jpeg"
 	image, err := camera.DecodeImageFromCamera(ctx, mimeType, nil, tf.cam)
@@ -217,7 +235,7 @@ func (tf *myTriangleFinder) CaptureAllFromCamera(
 		res.Image = image
 	}
 	if opt.ReturnDetections {
-		dets, err := tf.DetectionsFromCamera(ctx, cameraName, extra)
+		dets, err := tf.Detections(ctx, image, extra)
 		if err != nil {
 			return viscapture.VisCapture{}, errors.Errorf("failed to get detections from camera for %s got: %s", ModelName, err)
 		}
