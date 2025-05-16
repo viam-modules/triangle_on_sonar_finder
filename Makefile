@@ -1,11 +1,11 @@
 
 GO_BUILD_ENV :=
 GO_BUILD_FLAGS := -tags no_cgo,osusergo,netgo
-MODULE_BINARY := triangle_on_sonar_finder
+MODULE_BINARY := triangle_finder
 
 ifeq ($(VIAM_TARGET_OS), windows)
 	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
-	MODULE_BINARY = triangle_on_sonar_finder.exe
+	MODULE_BINARY = triangle_finder.exe
 endif
 
 ifeq ($(VIAM_TARGET_OS),linux)
@@ -30,7 +30,7 @@ strip-module:
 
 # TODO: Remove when viamrobotics/rdk#4969 is deployed
 fix-meta-for-win:
-	jq '.entrypoint = "triangle_on_sonar_finder.exe"' meta.json > temp.json && mv temp.json meta.json
+	jq '.entrypoint = "triangle_finder.exe"' meta.json > temp.json && mv temp.json meta.json
 
 all: module test
 
