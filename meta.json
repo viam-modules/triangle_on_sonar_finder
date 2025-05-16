@@ -16,9 +16,11 @@
     "path": "bin/module.tar.gz",
     "arch": [
       "linux/amd64",
-      "linux/arm64"
+      "linux/arm64",
+      "darwin/arm64",
+      "windows/amd64"
     ]
   },
-  "entrypoint": "bin/viam-triangle-finder",
+  "entrypoint": "triangle_on_sonar_finder",
   "first_run": ""
 }

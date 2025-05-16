@@ -1,41 +1,39 @@
+
 GO_BUILD_ENV :=
-GO_BUILD_FLAGS :=
-MODULE_BINARY := bin/viam-triangle-finder
+GO_BUILD_FLAGS := -tags no_cgo,osusergo,netgo
+MODULE_BINARY := triangle_on_sonar_finder
 
 ifeq ($(VIAM_TARGET_OS), windows)
 	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
-	GO_BUILD_FLAGS := -tags no_cgo	
-	MODULE_BINARY = bin/viam-hough-transform.exe
+	MODULE_BINARY = triangle_on_sonar_finder.exe
 endif
 
-ifeq ($(VIAM_TARGET_OS), linux)
-	GO_BUILD_ENV += CGO_LDFLAGS='-ltbb'
-	GO_BUILD_FLAGS := -tags opencvstatic
+ifeq ($(VIAM_TARGET_OS),linux)
+    GO_BUILD_FLAGS += -ldflags="-extldflags=-static -s -w"
 endif
 
-
-$(MODULE_BINARY):
-	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/main.go
+$(MODULE_BINARY): Makefile
+	$(GO_BUILD_ENV) go build $(GO_BUILD_FLAGS) -o $(MODULE_BINARY) cmd/module/cmd.go
 
 module.tar.gz: meta.json $(MODULE_BINARY)
-ifeq ($(VIAM_TARGET_OS), windows)
-	jq '.entrypoint = "./bin/triangle-finder.exe"' meta.json > temp.json && mv temp.json meta.json
-else
-	strip $(MODULE_BINARY)
-endif
-	tar czf $@ meta.json $(MODULE_BINARY)
-ifeq ($(VIAM_TARGET_OS), windows)
+	tar czf $@ meta.json $(MODULE_BINARY) 
 	git checkout meta.json
+
+ifeq ($(VIAM_TARGET_OS), windows)
+module.tar.gz: fix-meta-for-win
+else
+module.tar.gz: strip-module
 endif
 
-test: setup
-	GO_BUILD_ENV += GOOS=windows GOARCH=amd64
-	GO_BUILD_FLAGS := -tags no_cgo	
-	MODULE_BINARY = bin/viam-hough-transform.ex
-	go test -v ./triangle_on_sonar_finder -run TestTriangleOnSonarFinde
+strip-module: 
+	strip $(MODULE_BINARY)
 
-module: module.tar.gz
+# TODO: Remove when viamrobotics/rdk#4969 is deployed
+fix-meta-for-win:
+	jq '.entrypoint = "triangle_on_sonar_finder.exe"' meta.json > temp.json && mv temp.json meta.json
 
-setup:
+all: module test
+
+update:
+	go get go.viam.com/rdk@latest
 	go mod tidy
-
