@@ -3,7 +3,7 @@
   "module_id": "viam:triangle-finder",
   "visibility": "private",
   "url": "https://github.com/viam-modules/triangle_on_sonar_finder",
-  "description": "",
+  "description": "A module for finding triangle features on a screen",
   "models": [
     {
       "api": "rdk:service:vision",
@@ -12,8 +12,6 @@
   ],
   "build": {
     "build": "make module.tar.gz",
-    "setup": "make setup",
-    "path": "bin/module.tar.gz",
     "arch": [
       "linux/amd64",
       "linux/arm64",
