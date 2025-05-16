@@ -21,6 +21,6 @@
       "windows/amd64"
     ]
   },
-  "entrypoint": "viam-triangle-finder",
+  "entrypoint": "triangle_on_sonar_finder",
   "first_run": ""
 }
