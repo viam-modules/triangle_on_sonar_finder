@@ -22,7 +22,7 @@ type Box struct {
 // no valid templates are found.
 func loadTemplates(templateDir string) ([]TemplateFromImage, error) {
 	templates := []TemplateFromImage{}
-
+	templateDir = "templates" //TODO: make this default
 	// Check if directory exists
 	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("template directory not found: %s", templateDir)
