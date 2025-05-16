@@ -21,6 +21,6 @@
       "windows/amd64"
     ]
   },
-  "entrypoint": "bin/viam-triangle-finder",
+  "entrypoint": "viam-triangle-finder",
   "first_run": ""
 }
