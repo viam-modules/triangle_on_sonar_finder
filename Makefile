@@ -19,18 +19,12 @@ module.tar.gz: meta.json $(MODULE_BINARY)
 	tar czf $@ meta.json $(MODULE_BINARY) templates
 	git checkout meta.json
 
-ifeq ($(VIAM_TARGET_OS), windows)
-module.tar.gz: fix-meta-for-win
-else
+ifneq ($(VIAM_TARGET_OS), windows)
 module.tar.gz: strip-module
 endif
 
 strip-module: 
 	strip $(MODULE_BINARY)
-
-# TODO: Remove when viamrobotics/rdk#4969 is deployed
-fix-meta-for-win:
-	jq '.entrypoint = "triangle_finder.exe"' meta.json > temp.json && mv temp.json meta.json
 
 all: module test
 
