@@ -31,3 +31,6 @@ all: module test
 update:
 	go get go.viam.com/rdk@latest
 	go mod tidy
+
+test:
+	go test ./...
