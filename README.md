@@ -15,8 +15,3 @@ edit this and change the path:
   "threshold": 0.65
 }
 ```
-
-# Compiling
-
-You will need OpenCV 4.11.0 installed to build this! This is available via `brew` on Mac and Linux,
-but not through `apt-get`.
