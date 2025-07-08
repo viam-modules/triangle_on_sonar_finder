@@ -33,3 +33,22 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	test.That(t, len(detections), test.ShouldEqual, 2)
 
 }
+
+func BenchmarkTriangls(t *testing.B) {
+	templates, err := loadTemplates()
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, len(templates), test.ShouldEqual, 3)
+
+	img, err := openImage("inputs/input_1.jpg")
+	test.That(t, err, test.ShouldBeNil)
+	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
+
+	t.ResetTimer()
+
+	for t.Loop() {
+		imgMatrix := ImageToMatrix(img)
+		detections := findTriangles(templates, imgMatrix, 2, .7)
+		test.That(t, len(detections), test.ShouldEqual, 2)
+	}
+
+}
