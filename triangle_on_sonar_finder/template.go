@@ -1,11 +1,9 @@
 package triangle_on_sonar_finder
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"math"
-	"os"
 )
 
 // TemplateFromImage represents a template created from an image
@@ -17,19 +15,7 @@ type TemplateFromImage struct {
 }
 
 // NewTemplateFromImage creates a new template from an image file
-func NewTemplateFromImage(imagePath string) (*TemplateFromImage, error) {
-	// Open and decode the image
-	f, err := os.Open(imagePath)
-	if err != nil {
-		return nil, fmt.Errorf("error opening image: %v", err)
-	}
-	defer f.Close()
-
-	img, _, err := image.Decode(f)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding image: %v", err)
-	}
-
+func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
 	// Convert to grayscale and normalize to [0,1]
 	bounds := img.Bounds()
 	width := bounds.Dx()

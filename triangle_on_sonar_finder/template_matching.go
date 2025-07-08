@@ -1,43 +1,33 @@
 package triangle_on_sonar_finder
 
 import (
+	"embed"
 	"fmt"
 	"image"
 	"image/color"
-	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+
+	objdet "go.viam.com/rdk/vision/objectdetection"
 )
 
-// Box represents a bounding box with position and dimensions
-type Box struct {
-	X      int
-	Y      int
-	Width  int
-	Height int
-}
+//go:embed templates/*
+var templateFS embed.FS
 
 // loadTemplates loads template images from the specified directory and returns
 // a slice of TemplateFromImage objects. Each template is normalized. Returns an error if the directory cannot be accessed or if
 // no valid templates are found.
-func loadTemplates(templateDir string) ([]TemplateFromImage, error) {
-	templates := []TemplateFromImage{}
-	templateDir = "templates" //TODO: make this default
-	// Check if directory exists
-	if _, err := os.Stat(templateDir); os.IsNotExist(err) {
-		return nil, fmt.Errorf("template directory not found: %s", templateDir)
-	}
-
-	// Define valid extensions
+func loadTemplates() ([]TemplateFromImage, error) {
 	validExtensions := []string{".png", ".jpg", ".jpeg"}
 
-	// Read files from directory
-	files, err := os.ReadDir(templateDir)
+	files, err := templateFS.ReadDir("templates")
 	if err != nil {
 		return nil, fmt.Errorf("error reading template directory: %v", err)
 	}
 
-	// Process each file
+	templates := []TemplateFromImage{}
+
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -52,14 +42,26 @@ func loadTemplates(templateDir string) ([]TemplateFromImage, error) {
 			}
 		}
 
-		if isValidExt {
-			templatePath := filepath.Join(templateDir, filename)
-			template, err := NewTemplateFromImage(templatePath)
-			if err != nil {
-				continue
-			}
-			templates = append(templates, *template)
+		if !isValidExt {
+			continue
 		}
+
+		f, err := templateFS.Open(filepath.Join("templates", filename))
+		if err != nil {
+			return nil, fmt.Errorf("cannot open file [%s]: %w", filename, err)
+		}
+		defer f.Close()
+
+		img, _, err := image.Decode(f)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding image (%s): %v", filename, err)
+		}
+
+		template, err := NewTemplateFromImage(img)
+		if err != nil {
+			return nil, fmt.Errorf("cannot create template from [%s]: %w", filename, err)
+		}
+		templates = append(templates, *template)
 	}
 	return templates, nil
 }
@@ -86,4 +88,79 @@ func ImageToMatrix(img image.Image) [][]float32 {
 	}
 
 	return matrix
+}
+
+// calculateIoU calculates the Intersection over Union between two rectangles
+func calculateIoU(box1, box2 *image.Rectangle) float64 {
+	if box1 == nil || box2 == nil {
+		return 0
+	}
+
+	// Calculate intersection rectangle
+	intersection := box1.Intersect(*box2)
+	if intersection.Empty() {
+		return 0
+	}
+
+	// Calculate areas
+	intersectionArea := intersection.Dx() * intersection.Dy()
+	box1Area := box1.Dx() * box1.Dy()
+	box2Area := box2.Dx() * box2.Dy()
+
+	// Calculate IoU
+	unionArea := box1Area + box2Area - intersectionArea
+	return float64(intersectionArea) / float64(unionArea)
+}
+
+func findTriangles(templates []TemplateFromImage, imgMatrix [][]float32, stride int, threshold float32) []objdet.Detection {
+	// Find matches using all templates
+	var allMatches []Match
+	for _, template := range templates {
+		matches := template.FindMatch(imgMatrix, stride, threshold) //TODO: stride configurable
+		allMatches = append(allMatches, matches...)
+	}
+
+	// Convert matches to detections
+	detections := make([]objdet.Detection, 0, len(allMatches))
+	for _, match := range allMatches {
+		box := match.GetBoundingBox()
+		det := objdet.NewDetectionWithoutImgBounds(box, float64(match.Score), "triangle")
+		detections = append(detections, det)
+	}
+
+	// Sort detections by score in descending order
+	sort.Slice(detections, func(i, j int) bool {
+		return detections[i].Score() > detections[j].Score()
+	})
+
+	// Apply Non-Maximum Suppression
+	var filteredDetections []objdet.Detection
+	used := make([]bool, len(detections))
+
+	for i := 0; i < len(detections); i++ {
+		if used[i] {
+			continue
+		}
+
+		// Keep the current detection
+		filteredDetections = append(filteredDetections, detections[i])
+		used[i] = true
+
+		// Check overlap with remaining detections
+		for j := i + 1; j < len(detections); j++ {
+			if used[j] {
+				continue
+			}
+
+			// Calculate IoU between current and remaining detection
+			iou := calculateIoU(detections[i].BoundingBox(), detections[j].BoundingBox())
+
+			// If IoU is greater than threshold, mark as used
+			if iou > 0.3 { // You can adjust this threshold
+				used[j] = true
+			}
+		}
+	}
+
+	return filteredDetections
 }

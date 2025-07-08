@@ -2,7 +2,6 @@ package triangle_on_sonar_finder
 
 import (
 	"context"
-	"sort"
 
 	"image"
 
@@ -36,9 +35,6 @@ func init() {
 type TriangleFinderConfig struct {
 	// Camera is the name of the camera to use for triangle detection.
 	Camera string `json:"camera_name"`
-
-	// PathToTemplatesDirectory is the path to the directory containing template images.
-	PathToTemplatesDirectory string `json:"path_to_templates_directory"`
 
 	// Threshold is the matching threshold value used for template matching.
 	Threshold float32 `json:"threshold,omitempty"`
@@ -76,14 +72,13 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 		return nil, errors.Errorf("failed to get camera from dependencies for %s got: %s", ModelName, err)
 	}
 
-	// load template images
-	tf.templates, err = loadTemplates(newConf.PathToTemplatesDirectory)
+	tf.templates, err = loadTemplates()
 	if err != nil {
 		return nil, errors.Errorf("failed to load template images for %s got: %s", ModelName, err)
 	}
 
 	if len(tf.templates) == 0 {
-		return nil, errors.Errorf("no valid template found in %s", newConf.PathToTemplatesDirectory)
+		return nil, errors.Errorf("no valid templates found?!")
 	}
 	return tf, nil
 }
@@ -100,79 +95,8 @@ func (tf *myTriangleFinder) GetProperties(ctx context.Context, extra map[string]
 	}, nil
 }
 
-// calculateIoU calculates the Intersection over Union between two rectangles
-func calculateIoU(box1, box2 *image.Rectangle) float64 {
-	if box1 == nil || box2 == nil {
-		return 0
-	}
-
-	// Calculate intersection rectangle
-	intersection := box1.Intersect(*box2)
-	if intersection.Empty() {
-		return 0
-	}
-
-	// Calculate areas
-	intersectionArea := intersection.Dx() * intersection.Dy()
-	box1Area := box1.Dx() * box1.Dy()
-	box2Area := box2.Dx() * box2.Dy()
-
-	// Calculate IoU
-	unionArea := box1Area + box2Area - intersectionArea
-	return float64(intersectionArea) / float64(unionArea)
-}
-
-func (tf *myTriangleFinder) findTriangle(imgMatrix [][]float32) []objdet.Detection {
-	// Find matches using all templates
-	var allMatches []Match
-	for _, template := range tf.templates {
-		matches := template.FindMatch(imgMatrix, 2, tf.config.Threshold) //TODO: stride configurable
-		allMatches = append(allMatches, matches...)
-	}
-
-	// Convert matches to detections
-	detections := make([]objdet.Detection, 0, len(allMatches))
-	for _, match := range allMatches {
-		box := match.GetBoundingBox()
-		det := objdet.NewDetectionWithoutImgBounds(box, float64(match.Score), "triangle")
-		detections = append(detections, det)
-	}
-
-	// Sort detections by score in descending order
-	sort.Slice(detections, func(i, j int) bool {
-		return detections[i].Score() > detections[j].Score()
-	})
-
-	// Apply Non-Maximum Suppression
-	var filteredDetections []objdet.Detection
-	used := make([]bool, len(detections))
-
-	for i := 0; i < len(detections); i++ {
-		if used[i] {
-			continue
-		}
-
-		// Keep the current detection
-		filteredDetections = append(filteredDetections, detections[i])
-		used[i] = true
-
-		// Check overlap with remaining detections
-		for j := i + 1; j < len(detections); j++ {
-			if used[j] {
-				continue
-			}
-
-			// Calculate IoU between current and remaining detection
-			iou := calculateIoU(detections[i].BoundingBox(), detections[j].BoundingBox())
-
-			// If IoU is greater than threshold, mark as used
-			if iou > 0.3 { // You can adjust this threshold
-				used[j] = true
-			}
-		}
-	}
-
-	return filteredDetections
+func (tf *myTriangleFinder) findTriangles(imgMatrix [][]float32) []objdet.Detection {
+	return findTriangles(tf.templates, imgMatrix, 2, tf.config.Threshold)
 }
 
 func (tf *myTriangleFinder) DetectionsFromCamera(
@@ -187,13 +111,13 @@ func (tf *myTriangleFinder) DetectionsFromCamera(
 	}
 
 	imgMatrix := ImageToMatrix(image)
-	return tf.findTriangle(imgMatrix), nil
+	return tf.findTriangles(imgMatrix), nil
 }
 
 func (tf *myTriangleFinder) Detections(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objdet.Detection, error) {
 	// Convert image to grayscale
 	mat := ImageToMatrix(img)
-	return tf.findTriangle(mat), nil
+	return tf.findTriangles(mat), nil
 }
 
 func (tf *myTriangleFinder) Classifications(ctx context.Context, img image.Image,
