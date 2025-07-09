@@ -95,7 +95,7 @@ func (tf *myTriangleFinder) GetProperties(ctx context.Context, extra map[string]
 	}, nil
 }
 
-func (tf *myTriangleFinder) findTriangles(imgMatrix [][]float32) []objdet.Detection {
+func (tf *myTriangleFinder) findTriangles(imgMatrix [][]byte) []objdet.Detection {
 	return findTriangles(tf.templates, imgMatrix, 2, tf.config.Threshold)
 }
 

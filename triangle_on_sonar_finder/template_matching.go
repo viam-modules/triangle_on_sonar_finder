@@ -67,23 +67,19 @@ func loadTemplates() ([]TemplateFromImage, error) {
 }
 
 // ImageToMatrix converts a grayscale image to a 2D float32 matrix
-func ImageToMatrix(img image.Image) [][]float32 {
+func ImageToMatrix(img image.Image) [][]byte {
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	// Create the 2D matrix
-	matrix := make([][]float32, height)
+	matrix := make([][]byte, height)
 	for i := range matrix {
-		matrix[i] = make([]float32, width)
+		matrix[i] = make([]byte, width)
 	}
 
-	// Convert each pixel to float32
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// Get the grayscale value and convert to float32
-			grayValue := float32(img.At(x+bounds.Min.X, y+bounds.Min.Y).(color.YCbCr).Y)
-			matrix[y][x] = grayValue
+			matrix[y][x] = img.At(x+bounds.Min.X, y+bounds.Min.Y).(color.YCbCr).Y
 		}
 	}
 
@@ -112,7 +108,7 @@ func calculateIoU(box1, box2 *image.Rectangle) float64 {
 	return float64(intersectionArea) / float64(unionArea)
 }
 
-func findTriangles(templates []TemplateFromImage, imgMatrix [][]float32, stride int, threshold float32) []objdet.Detection {
+func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int, threshold float32) []objdet.Detection {
 	// Find matches using all templates
 	var allMatches []Match
 	for _, template := range templates {

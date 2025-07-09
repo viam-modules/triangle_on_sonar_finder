@@ -8,7 +8,7 @@ import (
 
 // TemplateFromImage represents a template created from an image
 type TemplateFromImage struct {
-	kernel       [][]float32
+	kernel       [][]int16
 	kernelWidth  int
 	kernelHeight int
 	sumKernel    float32
@@ -21,9 +21,9 @@ func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
 	width := bounds.Dx()
 	height := bounds.Dy()
 
-	kernel := make([][]float32, height)
+	kernel := make([][]int16, height)
 	for i := range kernel {
-		kernel[i] = make([]float32, width)
+		kernel[i] = make([]int16, width)
 	}
 
 	// Convert image to normalized float32 matrix
@@ -31,42 +31,38 @@ func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
 		for x := 0; x < width; x++ {
 			// Get grayscale value and normalize to [0,1]
 			c := img.At(x+bounds.Min.X, y+bounds.Min.Y)
-			grayValue := float32(0)
+			grayValue := int16(0)
 			switch c := c.(type) {
 			case color.Gray:
-				grayValue = float32(c.Y)
-			case color.Gray16:
-				grayValue = float32(c.Y) / 65535.0
+				grayValue = int16(c.Y)
 			default:
-				// Convert to grayscale using standard formula
-				r, g, b, _ := c.RGBA()
-				grayValue = float32((r*299+g*587+b*114)/1000) / 65535.0
+				grayValue = int16(color.GrayModel.Convert(c).(color.Gray).Y)
 			}
 			kernel[y][x] = grayValue
 		}
 	}
 
-	// Calculate kernel mean
+	// we do the mean so we're looking for shapes, not color similarity
+
 	var kernelSum float32 = 0
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			kernelSum += kernel[y][x]
+			kernelSum += float32(kernel[y][x])
 		}
 	}
+
 	kernelMean := kernelSum / float32(height*width)
 
-	// Normalize kernel by subtracting mean
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			kernel[y][x] = kernel[y][x] - kernelMean
+			kernel[y][x] = int16(float32(kernel[y][x]) - kernelMean)
 		}
 	}
 
-	// Calculate sum of squared kernel values
 	var sumKernel float32 = 0
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			sumKernel += kernel[y][x] * kernel[y][x]
+			sumKernel += float32(kernel[y][x]) * float32(kernel[y][x])
 		}
 	}
 
@@ -79,7 +75,7 @@ func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
 }
 
 // FindMatch finds matches of the template in the given image matrix
-func (t *TemplateFromImage) FindMatch(image [][]float32, stride int, threshold float32) []Match {
+func (t *TemplateFromImage) FindMatch(image [][]byte, stride int, threshold float32) []Match {
 	height := len(image)
 	if height == 0 {
 		return nil
@@ -91,29 +87,29 @@ func (t *TemplateFromImage) FindMatch(image [][]float32, stride int, threshold f
 	for i := 0; i < height-t.kernelHeight; i += stride {
 		for j := 0; j < width-t.kernelWidth; j += stride {
 			// Calculate crop mean
-			var cropSum float32 = 0
+			var cropSum int = 0
 			for y := 0; y < t.kernelHeight; y++ {
 				for x := 0; x < t.kernelWidth; x++ {
-					cropSum += image[i+y][j+x]
+					cropSum += int(image[i+y][j+x])
 				}
 			}
-			cropMean := cropSum / float32(t.kernelHeight*t.kernelWidth)
+			cropMean := cropSum / (t.kernelHeight * t.kernelWidth)
 
-			// Calculate normalized correlation
-			var sumProduct float32 = 0
-			var sumCropSquared float32 = 0
+			sumProduct := 0
+			sumCropSquared := 0
+
 			for y := 0; y < t.kernelHeight; y++ {
 				for x := 0; x < t.kernelWidth; x++ {
-					normalizedCrop := image[i+y][j+x] - cropMean
-					sumProduct += normalizedCrop * t.kernel[y][x]
+					normalizedCrop := int(image[i+y][j+x]) - cropMean
+					sumProduct += normalizedCrop * int(t.kernel[y][x])
 					sumCropSquared += normalizedCrop * normalizedCrop
 				}
 			}
 
 			// Calculate correlation coefficient
-			denominator := float32(math.Sqrt(float64(sumCropSquared * t.sumKernel)))
+			denominator := float32(math.Sqrt(float64(float32(sumCropSquared) * t.sumKernel)))
 			if denominator > 0 {
-				corr := sumProduct / denominator
+				corr := float32(sumProduct) / denominator
 				if corr > threshold {
 					matches = append(matches, Match{
 						X:      j,
