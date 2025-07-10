@@ -57,7 +57,7 @@ func loadTemplates() ([]TemplateFromImage, error) {
 			return nil, fmt.Errorf("error decoding image (%s): %v", filename, err)
 		}
 
-		template, err := NewTemplateFromImage(img)
+		template, err := NewTemplateFromImage(img, scale) //passing 1,1, because templates do not need to be scaled for coord matching
 		if err != nil {
 			return nil, fmt.Errorf("cannot create template from [%s]: %w", filename, err)
 		}
@@ -68,17 +68,19 @@ func loadTemplates() ([]TemplateFromImage, error) {
 
 // ImageToMatrix converts a grayscale image to a 2D float32 matrix
 func ImageToMatrix(img image.Image) [][]byte {
+	originalWidth := img.Bounds().Dx()
+	img = resizeImage(img, uint(float64(originalWidth)*scale)) //resizing imag to width 480 to save time, 0 maintains aspect ratio, template will be resize proportionally
 	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
+	newWidth := bounds.Dx()
+	newHeight := bounds.Dy()
 
-	matrix := make([][]byte, height)
+	matrix := make([][]byte, newHeight)
 	for i := range matrix {
-		matrix[i] = make([]byte, width)
+		matrix[i] = make([]byte, newWidth)
 	}
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := 0; y < newHeight; y++ {
+		for x := 0; x < newWidth; x++ {
 			matrix[y][x] = img.At(x+bounds.Min.X, y+bounds.Min.Y).(color.YCbCr).Y
 		}
 	}
@@ -112,7 +114,7 @@ func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int
 	// Find matches using all templates
 	var allMatches []Match
 	for _, template := range templates {
-		matches := template.FindMatch(imgMatrix, stride, threshold) //TODO: stride configurable
+		matches := template.FindMatch(imgMatrix, stride, threshold, scale)
 		allMatches = append(allMatches, matches...)
 	}
 
