@@ -4,6 +4,8 @@ import (
 	"image"
 	"image/color"
 	"math"
+
+	"github.com/nfnt/resize"
 )
 
 // TemplateFromImage represents a template created from an image
@@ -12,11 +14,16 @@ type TemplateFromImage struct {
 	kernelWidth  int
 	kernelHeight int
 	sumKernel    float32
+	originalSize image.Point
 }
 
 // NewTemplateFromImage creates a new template from an image file
-func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
-	// Convert to grayscale and normalize to [0,1]
+func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, error) {
+	// Resize image, convert to grayscale and normalize to [0,1]
+	originalSize := image.Point{X: img.Bounds().Dx(), Y: img.Bounds().Dy()}
+	newWidth := uint(float64(originalSize.X) * scale)
+	// Resize template proportionally to how we resize input image
+	img = resizeImage(img, newWidth)
 	bounds := img.Bounds()
 	width := bounds.Dx()
 	height := bounds.Dy()
@@ -71,11 +78,12 @@ func NewTemplateFromImage(img image.Image) (*TemplateFromImage, error) {
 		kernelWidth:  width,
 		kernelHeight: height,
 		sumKernel:    sumKernel,
+		originalSize: originalSize,
 	}, nil
 }
 
-// FindMatch finds matches of the template in the given image matrix
-func (t *TemplateFromImage) FindMatch(image [][]byte, stride int, threshold float32) []Match {
+// FindMatch finds matches of the template in the given image matrix and scales the matches to the original image size
+func (t *TemplateFromImage) FindMatch(image [][]byte, stride int, threshold float32, scale float64) []Match {
 	height := len(image)
 	if height == 0 {
 		return nil
@@ -112,10 +120,10 @@ func (t *TemplateFromImage) FindMatch(image [][]byte, stride int, threshold floa
 				corr := float32(sumProduct) / denominator
 				if corr > threshold {
 					matches = append(matches, Match{
-						X:      j,
-						Y:      i,
-						Width:  t.kernelWidth,
-						Height: t.kernelHeight,
+						X:      int(float64(j) * 1 / scale),
+						Y:      int(float64(i) * 1 / scale),
+						Width:  t.originalSize.X,
+						Height: t.originalSize.Y,
 						Score:  corr,
 					})
 				}
@@ -141,4 +149,7 @@ func (m *Match) GetBoundingBox() image.Rectangle {
 		Min: image.Point{X: m.X, Y: m.Y},
 		Max: image.Point{X: m.X + m.Width, Y: m.Y + m.Height},
 	}
+}
+func resizeImage(img image.Image, newWidth uint) image.Image {
+	return resize.Resize(newWidth, 0, img, resize.Lanczos3) //lanczos3 is best for downsampling
 }

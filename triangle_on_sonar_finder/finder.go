@@ -38,6 +38,9 @@ type TriangleFinderConfig struct {
 
 	// Threshold is the matching threshold value used for template matching.
 	Threshold float32 `json:"threshold,omitempty"`
+
+	// Scale is the resizing scale factor for input images (while maintaining aspect ratio)
+	Scale float64 `json:"scale,omitempty"`
 }
 
 // TODO: implement Validate
@@ -53,6 +56,7 @@ type myTriangleFinder struct {
 	cam       camera.Camera
 	config    *TriangleFinderConfig
 	templates []TemplateFromImage
+	scale     float64
 }
 
 func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf resource.Config, logger logging.Logger) (vision.Service, error) {
@@ -65,6 +69,7 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 		name:   conf.ResourceName(),
 		logger: logger,
 		config: newConf,
+		scale:  getScaleOrDefault(newConf.Scale),
 	}
 	// get camera
 	tf.cam, err = camera.FromDependencies(deps, newConf.Camera)
@@ -72,7 +77,7 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 		return nil, errors.Errorf("failed to get camera from dependencies for %s got: %s", ModelName, err)
 	}
 
-	tf.templates, err = loadTemplates()
+	tf.templates, err = loadTemplates(tf.scale)
 	if err != nil {
 		return nil, errors.Errorf("failed to load template images for %s got: %s", ModelName, err)
 	}
@@ -83,6 +88,12 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 	return tf, nil
 }
 
+func getScaleOrDefault(scale float64) float64 {
+	if scale <= 0 {
+		return 0.3 // default value
+	}
+	return scale
+}
 func (tf *myTriangleFinder) Name() resource.Name {
 	return tf.name
 }
@@ -96,7 +107,7 @@ func (tf *myTriangleFinder) GetProperties(ctx context.Context, extra map[string]
 }
 
 func (tf *myTriangleFinder) findTriangles(imgMatrix [][]byte) []objdet.Detection {
-	return findTriangles(tf.templates, imgMatrix, 2, tf.config.Threshold)
+	return findTriangles(tf.templates, imgMatrix, 2, tf.config.Threshold, tf.scale)
 }
 
 func (tf *myTriangleFinder) DetectionsFromCamera(
@@ -110,13 +121,13 @@ func (tf *myTriangleFinder) DetectionsFromCamera(
 		return nil, errors.Errorf("failed to get and decode image for %s got: %s", ModelName, err)
 	}
 
-	imgMatrix := ImageToMatrix(image)
+	imgMatrix := ImageToMatrix(image, tf.scale)
 	return tf.findTriangles(imgMatrix), nil
 }
 
 func (tf *myTriangleFinder) Detections(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objdet.Detection, error) {
 	// Convert image to grayscale
-	mat := ImageToMatrix(img)
+	mat := ImageToMatrix(img, tf.scale)
 	return tf.findTriangles(mat), nil
 }
 

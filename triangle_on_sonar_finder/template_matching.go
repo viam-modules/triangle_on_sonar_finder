@@ -18,7 +18,7 @@ var templateFS embed.FS
 // loadTemplates loads template images from the specified directory and returns
 // a slice of TemplateFromImage objects. Each template is normalized. Returns an error if the directory cannot be accessed or if
 // no valid templates are found.
-func loadTemplates() ([]TemplateFromImage, error) {
+func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 	validExtensions := []string{".png", ".jpg", ".jpeg"}
 
 	files, err := templateFS.ReadDir("templates")
@@ -57,7 +57,7 @@ func loadTemplates() ([]TemplateFromImage, error) {
 			return nil, fmt.Errorf("error decoding image (%s): %v", filename, err)
 		}
 
-		template, err := NewTemplateFromImage(img)
+		template, err := NewTemplateFromImage(img, scale)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create template from [%s]: %w", filename, err)
 		}
@@ -67,18 +67,20 @@ func loadTemplates() ([]TemplateFromImage, error) {
 }
 
 // ImageToMatrix converts a grayscale image to a 2D float32 matrix
-func ImageToMatrix(img image.Image) [][]byte {
+func ImageToMatrix(img image.Image, scale float64) [][]byte {
+	originalWidth := img.Bounds().Dx()
+	img = resizeImage(img, uint(float64(originalWidth)*scale)) //resizing image
 	bounds := img.Bounds()
-	width := bounds.Dx()
-	height := bounds.Dy()
+	newWidth := bounds.Dx()
+	newHeight := bounds.Dy()
 
-	matrix := make([][]byte, height)
+	matrix := make([][]byte, newHeight)
 	for i := range matrix {
-		matrix[i] = make([]byte, width)
+		matrix[i] = make([]byte, newWidth)
 	}
 
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
+	for y := 0; y < newHeight; y++ {
+		for x := 0; x < newWidth; x++ {
 			matrix[y][x] = img.At(x+bounds.Min.X, y+bounds.Min.Y).(color.YCbCr).Y
 		}
 	}
@@ -108,11 +110,11 @@ func calculateIoU(box1, box2 *image.Rectangle) float64 {
 	return float64(intersectionArea) / float64(unionArea)
 }
 
-func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int, threshold float32) []objdet.Detection {
+func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int, threshold float32, scale float64) []objdet.Detection {
 	// Find matches using all templates
 	var allMatches []Match
 	for _, template := range templates {
-		matches := template.FindMatch(imgMatrix, stride, threshold) //TODO: stride configurable
+		matches := template.FindMatch(imgMatrix, stride, threshold, scale)
 		allMatches = append(allMatches, matches...)
 	}
 
