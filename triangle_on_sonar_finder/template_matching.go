@@ -18,7 +18,7 @@ var templateFS embed.FS
 // loadTemplates loads template images from the specified directory and returns
 // a slice of TemplateFromImage objects. Each template is normalized. Returns an error if the directory cannot be accessed or if
 // no valid templates are found.
-func loadTemplates() ([]TemplateFromImage, error) {
+func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 	validExtensions := []string{".png", ".jpg", ".jpeg"}
 
 	files, err := templateFS.ReadDir("templates")
@@ -57,7 +57,7 @@ func loadTemplates() ([]TemplateFromImage, error) {
 			return nil, fmt.Errorf("error decoding image (%s): %v", filename, err)
 		}
 
-		template, err := NewTemplateFromImage(img, scale) //passing 1,1, because templates do not need to be scaled for coord matching
+		template, err := NewTemplateFromImage(img, scale)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create template from [%s]: %w", filename, err)
 		}
@@ -67,9 +67,9 @@ func loadTemplates() ([]TemplateFromImage, error) {
 }
 
 // ImageToMatrix converts a grayscale image to a 2D float32 matrix
-func ImageToMatrix(img image.Image) [][]byte {
+func ImageToMatrix(img image.Image, scale float64) [][]byte {
 	originalWidth := img.Bounds().Dx()
-	img = resizeImage(img, uint(float64(originalWidth)*scale)) //resizing imag to width 480 to save time, 0 maintains aspect ratio, template will be resize proportionally
+	img = resizeImage(img, uint(float64(originalWidth)*scale)) //resizing image
 	bounds := img.Bounds()
 	newWidth := bounds.Dx()
 	newHeight := bounds.Dy()
@@ -110,7 +110,7 @@ func calculateIoU(box1, box2 *image.Rectangle) float64 {
 	return float64(intersectionArea) / float64(unionArea)
 }
 
-func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int, threshold float32) []objdet.Detection {
+func findTriangles(templates []TemplateFromImage, imgMatrix [][]byte, stride int, threshold float32, scale float64) []objdet.Detection {
 	// Find matches using all templates
 	var allMatches []Match
 	for _, template := range templates {

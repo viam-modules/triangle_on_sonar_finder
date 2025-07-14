@@ -17,10 +17,6 @@ type TemplateFromImage struct {
 	originalSize image.Point
 }
 
-const (
-	scale = 0.5 // Width for input images (height calculated to maintain aspect ratio), can change for best speed/accuracy
-)
-
 // NewTemplateFromImage creates a new template from an image file
 func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, error) {
 	// Resize image, convert to grayscale and normalize to [0,1]
