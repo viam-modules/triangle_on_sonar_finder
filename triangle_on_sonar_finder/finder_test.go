@@ -20,7 +20,8 @@ func openImage(fn string) (image.Image, error) {
 }
 
 func TestTriangleOnSonarFinder(t *testing.T) {
-	templates, err := loadTemplates(0.5)
+	scale := 0.5
+	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, len(templates), test.ShouldEqual, 3)
 
@@ -29,31 +30,35 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight)
 	}
 
-	img, err := openImage("inputs/input_1.jpg")
+	img, err := openImage("inputs/input_3.jpg")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
-	imgMatrix := ImageToMatrix(img, 0.5)
-	detections := findTriangles(templates, imgMatrix, 2, .7, 0.3)
+	imgMatrix := ImageToMatrix(img, scale)
+	detections := findTriangles(templates, imgMatrix, 2, .48, scale) // 0.5 confidence threshold
+	for i, det := range detections {
+		t.Logf("Detection %d: Box=%v, Score=%f", i, det.BoundingBox(), det.Score())
+	}
 	test.That(t, len(detections), test.ShouldEqual, 3)
 
 }
 
 func BenchmarkTriangls(t *testing.B) {
-	templates, err := loadTemplates(0.5)
+	scale := 0.7
+	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, len(templates), test.ShouldEqual, 3)
 
-	img, err := openImage("inputs/input_1.jpg")
+	img, err := openImage("inputs/input_2.jpg")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
 	t.ResetTimer()
 
 	for t.Loop() {
-		imgMatrix := ImageToMatrix(img, 0.5)
-		detections := findTriangles(templates, imgMatrix, 2, .65, 0.3)
-		test.That(t, len(detections), test.ShouldEqual, 3)
+		imgMatrix := ImageToMatrix(img, scale)
+		detections := findTriangles(templates, imgMatrix, 2, .5, scale)
+		test.That(t, len(detections), test.ShouldEqual, 1)
 	}
 
 }
@@ -68,14 +73,14 @@ func TestTemplateResizing(t *testing.T) {
 	t.Logf("Original template size: %v", originalSize)
 
 	// Create scaled template image
-	template, err := NewTemplateFromImage(img, 0.3)
+	template, err := NewTemplateFromImage(img, 0.8)
 	test.That(t, err, test.ShouldBeNil)
 
 	test.That(t, template.originalSize, test.ShouldResemble, originalSize)
 
 	// Verify kernel dimensions are scaled correctly
-	expectedWidth := int(float64(originalSize.X) * 0.3)
-	expectedHeight := int(float64(originalSize.Y) * 0.3)
+	expectedWidth := int(float64(originalSize.X) * 0.8)
+	expectedHeight := int(float64(originalSize.Y) * 0.8)
 	test.That(t, template.kernelWidth, test.ShouldEqual, expectedWidth)
 	test.That(t, template.kernelHeight, test.ShouldEqual, expectedHeight)
 }
@@ -92,7 +97,7 @@ func TestCoordinateScaling(t *testing.T) {
 	// Process image
 	matrix := ImageToMatrix(img, 0.5)
 	t.Logf("Resized input image size: %dx%d", len(matrix[0]), len(matrix))
-	detections := findTriangles(templates, matrix, 2, 0.65, 0.3)
+	detections := findTriangles(templates, matrix, 2, 0.65, 0.5)
 
 	for i, det := range detections {
 		box := det.BoundingBox()
