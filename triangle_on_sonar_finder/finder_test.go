@@ -2,6 +2,8 @@ package triangle_on_sonar_finder
 
 import (
 	"image"
+	"image/color"
+	"image/draw"
 	"os"
 	"testing"
 
@@ -20,40 +22,62 @@ func openImage(fn string) (image.Image, error) {
 }
 
 func TestTriangleOnSonarFinder(t *testing.T) {
-	templates, err := loadTemplates(0.5)
+	scale := 0.5
+	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, len(templates), test.ShouldEqual, 3)
+	test.That(t, len(templates), test.ShouldEqual, 13)
 
 	for i, tmpl := range templates {
 		t.Logf("Template %d: Original size: %v, Resized size: %dx%d",
 			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight)
+		if i == 4 { // save preprocessed template for debugging
+			edgeImg := EdgeMatrixToGrayImage(tmpl.kernel)
+			err = SaveImageAsPNG(edgeImg, "debug_template_edge.png")
+			test.That(t, err, test.ShouldBeNil)
+		}
 	}
-
-	img, err := openImage("inputs/input_1.jpg")
+	img, err := openImage("inputs/image_2.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
-	imgMatrix := ImageToMatrix(img, 0.5)
-	detections := findTriangles(templates, imgMatrix, 2, .7, 0.3)
-	test.That(t, len(detections), test.ShouldEqual, 3)
+	imgMatrix := ImageToMatrix(img, scale)
 
+	edgeImg2 := EdgeMatrixToGrayImage(imgMatrix)
+	err = SaveImageAsPNG(edgeImg2, "debug_edge_matrix.png") //save edge matrix for debugging
+	test.That(t, err, test.ShouldBeNil)
+
+	detections := findTriangles(templates, imgMatrix, 2, 0.65, scale)
+
+	//drawign detections on image
+	rgbaImg := image.NewRGBA(img.Bounds())
+	draw.Draw(rgbaImg, rgbaImg.Bounds(), img, image.Point{}, draw.Src)
+	for i, det := range detections {
+		t.Logf("Detection %d: Box=%v, Score=%f", i, det.BoundingBox(), det.Score())
+		DrawBoundingBox(rgbaImg, *det.BoundingBox(), color.RGBA{255, 0, 0, 255}, 2, float32(det.Score())) // red, thickness 2
+	}
+	err = SaveImageAsPNG(rgbaImg, "detections/debug_detections_2.png") //save detections with bb for debugging
+	test.That(t, err, test.ShouldBeNil)
+
+	//verify number of detections
+	test.That(t, len(detections), test.ShouldEqual, 2)
 }
 
 func BenchmarkTriangls(t *testing.B) {
-	templates, err := loadTemplates(0.5)
+	scale := 0.5
+	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, len(templates), test.ShouldEqual, 3)
+	test.That(t, len(templates), test.ShouldEqual, 12)
 
-	img, err := openImage("inputs/input_1.jpg")
+	img, err := openImage("inputs/image_1.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
 	t.ResetTimer()
 
 	for t.Loop() {
-		imgMatrix := ImageToMatrix(img, 0.5)
-		detections := findTriangles(templates, imgMatrix, 2, .65, 0.3)
-		test.That(t, len(detections), test.ShouldEqual, 3)
+		imgMatrix := ImageToMatrix(img, scale)
+		detections := findTriangles(templates, imgMatrix, 2, .65, scale)
+		test.That(t, len(detections), test.ShouldEqual, 5)
 	}
 
 }
@@ -68,14 +92,13 @@ func TestTemplateResizing(t *testing.T) {
 	t.Logf("Original template size: %v", originalSize)
 
 	// Create scaled template image
-	template, err := NewTemplateFromImage(img, 0.3)
+	template, err := NewTemplateFromImage(img, 0.8)
 	test.That(t, err, test.ShouldBeNil)
-
 	test.That(t, template.originalSize, test.ShouldResemble, originalSize)
 
 	// Verify kernel dimensions are scaled correctly
-	expectedWidth := int(float64(originalSize.X) * 0.3)
-	expectedHeight := int(float64(originalSize.Y) * 0.3)
+	expectedWidth := int(float64(originalSize.X) * 0.8)
+	expectedHeight := int(float64(originalSize.Y) * 0.8)
 	test.That(t, template.kernelWidth, test.ShouldEqual, expectedWidth)
 	test.That(t, template.kernelHeight, test.ShouldEqual, expectedHeight)
 }
@@ -92,7 +115,7 @@ func TestCoordinateScaling(t *testing.T) {
 	// Process image
 	matrix := ImageToMatrix(img, 0.5)
 	t.Logf("Resized input image size: %dx%d", len(matrix[0]), len(matrix))
-	detections := findTriangles(templates, matrix, 2, 0.65, 0.3)
+	detections := findTriangles(templates, matrix, 2, 0.65, 0.5)
 
 	for i, det := range detections {
 		box := det.BoundingBox()
