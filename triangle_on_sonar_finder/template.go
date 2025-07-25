@@ -1,11 +1,17 @@
 package triangle_on_sonar_finder
 
 import (
+	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"math"
 	"os"
+
+	"golang.org/x/image/font"
+	"golang.org/x/image/font/basicfont"
+	"golang.org/x/image/math/fixed"
 
 	"github.com/nfnt/resize"
 )
@@ -27,6 +33,9 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 	img = resizeImage(img, newWidth)
 	bounds := img.Bounds()
 	width := bounds.Dx()
+	if width != int(newWidth) {
+		return nil, fmt.Errorf("width after resizing (%d) does not match expected newWidth (%d)", width, newWidth)
+	}
 	height := bounds.Dy()
 
 	kernel := make([][]float64, height)
@@ -35,7 +44,7 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 		kernel[i] = make([]float64, width) // now kernel is [][]float64
 	}
 
-	// step 2: convert image to normalized float32 matrix
+	//step 2: convert image to normalized float32 matrix
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			// Get grayscale value and normalize to [0,1]
@@ -52,16 +61,17 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 			kernel[y][x] = grayValue
 		}
 	}
+
 	//step 3: applying sobel edge detection
 	edgeMatrix := sobelEdge(kernel, width, height, 50)
-	kernel = edgeMatrix
+	edgeKernel := edgeMatrix
 
 	// we do the mean so we're looking for shapes, not color similarity
 	// step 4: subtracting mean for shape matching
 	var kernelSum float32 = 0
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			kernelSum += float32(kernel[y][x])
+			kernelSum += float32(edgeKernel[y][x])
 		}
 	}
 
@@ -69,19 +79,19 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			kernel[y][x] = float64(float32(kernel[y][x]) - kernelMean)
+			edgeKernel[y][x] = float64(float32(edgeKernel[y][x]) - kernelMean)
 		}
 	}
 
 	var sumKernel float32 = 0
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			sumKernel += float32(kernel[y][x]) * float32(kernel[y][x])
+			sumKernel += float32(edgeKernel[y][x]) * float32(edgeKernel[y][x])
 		}
 	}
 
 	return &TemplateFromImage{
-		kernel:       kernel,
+		kernel:       edgeKernel,
 		kernelWidth:  width,
 		kernelHeight: height,
 		sumKernel:    sumKernel,
@@ -115,7 +125,7 @@ func (t *TemplateFromImage) FindMatch(image [][]float64, stride int, threshold f
 
 			for y := 0; y < t.kernelHeight; y++ {
 				for x := 0; x < t.kernelWidth; x++ {
-					normalizedCrop := image[i+y][j+x] - cropMean
+					normalizedCrop := image[i+y][j+x] - cropMean // mean subtraction from image
 					sumProduct += normalizedCrop * t.kernel[y][x]
 					sumCropSquared += normalizedCrop * normalizedCrop
 				}
@@ -230,4 +240,33 @@ func SaveImageAsPNG(img image.Image, filename string) error {
 	}
 	defer f.Close()
 	return png.Encode(f, img)
+}
+func DrawBoundingBox(img draw.Image, rect image.Rectangle, col color.Color, thickness int, score float32) {
+	minX, minY := rect.Min.X, rect.Min.Y
+	maxX, maxY := rect.Max.X, rect.Max.Y
+
+	for t := 0; t < thickness; t++ {
+		for x := minX + t; x < maxX-t; x++ {
+			img.Set(x, minY+t, col)
+			img.Set(x, maxY-1-t, col)
+		}
+		for y := minY + t; y < maxY-t; y++ {
+			img.Set(minX+t, y, col)
+			img.Set(maxX-1-t, y, col)
+		}
+
+	}
+	// label boxes with detection score
+	label := fmt.Sprintf("%.2f", score)
+	point := fixed.Point26_6{
+		X: fixed.I(minX),
+		Y: fixed.I(minY - 2), // above box
+	}
+	d := &font.Drawer{
+		Dst:  img,
+		Src:  image.NewUniform(color.RGBA{255, 255, 0, 255}),
+		Face: basicfont.Face7x13,
+		Dot:  point,
+	}
+	d.DrawString(label)
 }

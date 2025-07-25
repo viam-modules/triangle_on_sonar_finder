@@ -69,12 +69,13 @@ func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 // ImageToMatrix converts a grayscale image to a 2D float32 matrix -- preprocessing image using sobel edge detection and resizing
 func ImageToMatrix(img image.Image, scale float64) [][]float64 {
 	originalWidth := img.Bounds().Dx()
+	// step 1: resize image
 	img = resizeImage(img, uint(float64(originalWidth)*scale)) //resizing image
 	bounds := img.Bounds()
 	newWidth := bounds.Dx()
 	newHeight := bounds.Dy()
 
-	// step 1: convert to grayscale matrix (same logic for template)
+	// step 2: convert to grayscale matrix (same logic for template)
 	grayMatrix := make([][]float64, newHeight)
 	for y := 0; y < newHeight; y++ {
 		grayMatrix[y] = make([]float64, newWidth)
@@ -93,9 +94,9 @@ func ImageToMatrix(img image.Image, scale float64) [][]float64 {
 		}
 	}
 
-	// step 2: apply Sobel edge detection
+	// step 3: apply Sobel edge detection
 	edgeMatrix := sobelEdge(grayMatrix, newWidth, newHeight, 50) // adjust threshold as needed
-	// step 3: return the edge matrix [][]float64
+	// step 4: return the edge matrix [][]float64
 	return edgeMatrix
 }
 
