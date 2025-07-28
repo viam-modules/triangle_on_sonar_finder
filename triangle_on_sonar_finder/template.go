@@ -44,20 +44,13 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 		kernel[i] = make([]float64, width) // now kernel is [][]float64
 	}
 
-	//step 2: convert image to normalized float32 matrix
+	//step 2: convert image to grayscale matrix
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
-			// Get grayscale value and normalize to [0,1]
+			// Get grayscale value
 			c := img.At(x+bounds.Min.X, y+bounds.Min.Y)
-			grayValue := float64(0) //int16(0), using float64 as edge detection requires float for computing the sqrt of sum of squares sqrt(sx*sx + sy*sy)
-			switch v := c.(type) {
-			case color.YCbCr:
-				grayValue = float64(v.Y)
-			case color.Gray:
-				grayValue = float64(v.Y)
-			default:
-				grayValue = float64(color.GrayModel.Convert(c).(color.Gray).Y)
-			}
+			//using float64 as edge detection requires float for computing the sqrt of sum of squares sqrt(sx*sx + sy*sy)
+			grayValue := float64(color.GrayModel.Convert(c).(color.Gray).Y)
 			kernel[y][x] = grayValue
 		}
 	}
@@ -264,7 +257,7 @@ func DrawBoundingBox(img draw.Image, rect image.Rectangle, col color.Color, thic
 	}
 	d := &font.Drawer{
 		Dst:  img,
-		Src:  image.NewUniform(color.RGBA{255, 255, 0, 255}),
+		Src:  image.NewUniform(color.RGBA{255, 0, 0, 255}),
 		Face: basicfont.Face7x13,
 		Dot:  point,
 	}

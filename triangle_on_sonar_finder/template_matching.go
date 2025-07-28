@@ -81,15 +81,7 @@ func ImageToMatrix(img image.Image, scale float64) [][]float64 {
 		grayMatrix[y] = make([]float64, newWidth)
 		for x := 0; x < newWidth; x++ {
 			c := img.At(x+bounds.Min.X, y+bounds.Min.Y)
-			var grayValue float64
-			switch v := c.(type) {
-			case color.YCbCr:
-				grayValue = float64(v.Y)
-			case color.Gray:
-				grayValue = float64(v.Y)
-			default:
-				grayValue = float64(color.GrayModel.Convert(c).(color.Gray).Y)
-			}
+			grayValue := float64(color.GrayModel.Convert(c).(color.Gray).Y)
 			grayMatrix[y][x] = grayValue
 		}
 	}

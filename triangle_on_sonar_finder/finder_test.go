@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"go.viam.com/test"
+	"gonum.org/v1/plot"
+	"gonum.org/v1/plot/plotter"
+	"gonum.org/v1/plot/vg"
 )
 
 func openImage(fn string) (image.Image, error) {
@@ -30,25 +33,25 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	for i, tmpl := range templates {
 		t.Logf("Template %d: Original size: %v, Resized size: %dx%d",
 			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight)
-		if i == 4 { // save preprocessed template for debugging
-			edgeImg := EdgeMatrixToGrayImage(tmpl.kernel)
-			err = SaveImageAsPNG(edgeImg, "debug_template_edge.png")
-			test.That(t, err, test.ShouldBeNil)
-		}
+		//if i == 4 { // save preprocessed template for debugging
+		//	edgeImg := EdgeMatrixToGrayImage(tmpl.kernel)
+		//	err = SaveImageAsPNG(edgeImg, "debug_template_edge.png")
+		//	test.That(t, err, test.ShouldBeNil)
+		//}
 	}
-	img, err := openImage("inputs/image_2.png")
+	img, err := openImage("inputs/white_bg.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
 	imgMatrix := ImageToMatrix(img, scale)
 
-	edgeImg2 := EdgeMatrixToGrayImage(imgMatrix)
-	err = SaveImageAsPNG(edgeImg2, "debug_edge_matrix.png") //save edge matrix for debugging
-	test.That(t, err, test.ShouldBeNil)
+	//edgeImg2 := EdgeMatrixToGrayImage(imgMatrix)
+	//err = SaveImageAsPNG(edgeImg2, "debug_edge_matrix.png") //save edge matrix for debugging
+	//test.That(t, err, test.ShouldBeNil)
 
 	detections := findTriangles(templates, imgMatrix, 2, 0.65, scale)
 
-	//drawign detections on image
+	//drawing detections on image
 	rgbaImg := image.NewRGBA(img.Bounds())
 	draw.Draw(rgbaImg, rgbaImg.Bounds(), img, image.Point{}, draw.Src)
 	for i, det := range detections {
@@ -59,16 +62,16 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 
 	//verify number of detections
-	test.That(t, len(detections), test.ShouldEqual, 2)
+	test.That(t, len(detections), test.ShouldEqual, 3)
 }
 
 func BenchmarkTriangls(t *testing.B) {
 	scale := 0.5
 	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, len(templates), test.ShouldEqual, 12)
+	test.That(t, len(templates), test.ShouldEqual, 13)
 
-	img, err := openImage("inputs/image_1.png")
+	img, err := openImage("inputs/white_bg.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
@@ -77,7 +80,7 @@ func BenchmarkTriangls(t *testing.B) {
 	for t.Loop() {
 		imgMatrix := ImageToMatrix(img, scale)
 		detections := findTriangles(templates, imgMatrix, 2, .65, scale)
-		test.That(t, len(detections), test.ShouldEqual, 5)
+		test.That(t, len(detections), test.ShouldEqual, 3)
 	}
 
 }
@@ -140,5 +143,55 @@ func TestCoordinateScaling(t *testing.T) {
 			}
 		}
 		test.That(t, foundMatchingTemplate, test.ShouldBeTrue)
+	}
+}
+
+// plot histogram of correlation values to see distibution for finding best threshold
+func TestCorrelationHistogramGonum(t *testing.T) {
+	scale := 0.5
+	templates, err := loadTemplates(scale)
+	test.That(t, err, test.ShouldBeNil)
+
+	img, err := openImage("inputs/image_2.png")
+	test.That(t, err, test.ShouldBeNil)
+
+	imgMatrix := ImageToMatrix(img, scale)
+
+	// all correlation values from all templates
+	var allCorrelations []float32
+	lowThreshold := float32(0.4)
+
+	for _, template := range templates {
+		matches := template.FindMatch(imgMatrix, 2, lowThreshold, scale)
+		for _, match := range matches {
+			allCorrelations = append(allCorrelations, match.Score)
+		}
+	}
+
+	t.Logf("Total correlation values collected: %d", len(allCorrelations))
+
+	p := plot.New()
+	p.Title.Text = "Correlation Values Distribution"
+	p.X.Label.Text = "Correlation"
+	p.Y.Label.Text = "Frequency"
+
+	// Convert correlations to plotter.Values
+	values := make(plotter.Values, len(allCorrelations))
+	for i, corr := range allCorrelations {
+		values[i] = float64(corr)
+	}
+
+	// plot histogram
+	hist, err := plotter.NewHist(values, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hist.FillColor = color.RGBA{100, 150, 255, 255}
+	p.Add(hist)
+
+	// save plot
+	if err := p.Save(8*vg.Inch, 4*vg.Inch, "detections/correlation_histogram.png"); err != nil {
+		t.Fatal(err)
 	}
 }
