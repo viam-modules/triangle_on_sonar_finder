@@ -23,18 +23,26 @@ type TemplateFromImage struct {
 	kernelHeight int
 	sumKernel    float32
 	originalSize image.Point
+	padding      int
 }
 
 // NewTemplateFromImage creates a new template from an image file (including preprocessing steps)
 func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, error) {
 	originalSize := image.Point{X: img.Bounds().Dx(), Y: img.Bounds().Dy()}
-	newWidth := uint(float64(originalSize.X) * scale) // finding new width using same scale as img for resizing
+	resizedWidth := uint(float64(originalSize.X) * scale) // finding new width using same scale as img for resizing
 	// step 1: resize template proportionally to how we resize input image
-	img = resizeImage(img, newWidth)
-	bounds := img.Bounds()
+	img = resizeImage(img, resizedWidth)
+
+	//step 2: add padding to template, 30% of the width of the resized template
+	padding := int(float64(resizedWidth) * 0.3)
+	fmt.Println("padding", padding)
+	paddedImg := addPadding(img, padding)
+	bounds := paddedImg.Bounds()
 	width := bounds.Dx()
-	if width != int(newWidth) {
-		return nil, fmt.Errorf("width after resizing (%d) does not match expected newWidth (%d)", width, newWidth)
+	fmt.Println("width", width)
+	// resize check
+	if width != int(resizedWidth)+2*padding {
+		return nil, fmt.Errorf("width after padding (%d) does not match expected padded width (%d)", width, int(resizedWidth)+2*padding)
 	}
 	height := bounds.Dy()
 
@@ -44,23 +52,23 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 		kernel[i] = make([]float64, width) // now kernel is [][]float64
 	}
 
-	//step 2: convert image to grayscale matrix
+	//step 3: convert image to grayscale matrix
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
 			// Get grayscale value
-			c := img.At(x+bounds.Min.X, y+bounds.Min.Y)
+			c := paddedImg.At(x+bounds.Min.X, y+bounds.Min.Y)
 			//using float64 as edge detection requires float for computing the sqrt of sum of squares sqrt(sx*sx + sy*sy)
 			grayValue := float64(color.GrayModel.Convert(c).(color.Gray).Y)
 			kernel[y][x] = grayValue
 		}
 	}
 
-	//step 3: applying sobel edge detection
+	//step 4: applying sobel edge detection
 	edgeMatrix := sobelEdge(kernel, width, height, 50)
 	edgeKernel := edgeMatrix
 
 	// we do the mean so we're looking for shapes, not color similarity
-	// step 4: subtracting mean for shape matching
+	// step 5: subtracting mean for shape matching
 	var kernelSum float32 = 0
 	for y := 0; y < height; y++ {
 		for x := 0; x < width; x++ {
@@ -89,6 +97,7 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 		kernelHeight: height,
 		sumKernel:    sumKernel,
 		originalSize: originalSize,
+		padding:      padding,
 	}, nil
 }
 
@@ -130,8 +139,8 @@ func (t *TemplateFromImage) FindMatch(image [][]float64, stride int, threshold f
 				corr := float32(sumProduct) / denominator
 				if corr > threshold {
 					matches = append(matches, Match{
-						X:      int(float64(j) * 1 / scale),
-						Y:      int(float64(i) * 1 / scale),
+						X:      int(float64(j+t.padding) * 1 / scale),
+						Y:      int(float64(i+t.padding) * 1 / scale),
 						Width:  t.originalSize.X,
 						Height: t.originalSize.Y,
 						Score:  corr,
@@ -262,4 +271,24 @@ func DrawBoundingBox(img draw.Image, rect image.Rectangle, col color.Color, thic
 		Dot:  point,
 	}
 	d.DrawString(label)
+}
+
+// padding for higher template matching correlation scores and better edge detection
+func addPadding(img image.Image, padding int) image.Image {
+	bounds := img.Bounds()
+	newWidth := bounds.Dx() + 2*padding
+	newHeight := bounds.Dy() + 2*padding
+	paddedImg := image.NewRGBA(image.Rect(0, 0, newWidth, newHeight))
+
+	bgColor := img.At(bounds.Min.X, bounds.Min.Y) // sampling a pixel from the top-left corner
+
+	//create image with padded dims filled with bg color
+	draw.Draw(paddedImg, paddedImg.Bounds(), image.NewUniform(bgColor), image.Point{}, draw.Src)
+
+	// overlay original image in center
+	draw.Draw(paddedImg, image.Rect(padding, padding, padding+bounds.Dx(), padding+bounds.Dy()),
+		img, bounds.Min, draw.Src)
+	//display padded image
+	//SaveImageAsPNG(paddedImg, "debug_padded_image.png")
+	return paddedImg
 }

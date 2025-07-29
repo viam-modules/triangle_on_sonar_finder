@@ -28,18 +28,18 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	scale := 0.5
 	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, len(templates), test.ShouldEqual, 13)
+	test.That(t, len(templates), test.ShouldEqual, 15)
 
 	for i, tmpl := range templates {
-		t.Logf("Template %d: Original size: %v, Resized size: %dx%d",
-			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight)
+		t.Logf("Template %d: Original size: %v, Resized size: %dx%d, Padding: %d",
+			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight, tmpl.padding)
 		//if i == 4 { // save preprocessed template for debugging
 		//	edgeImg := EdgeMatrixToGrayImage(tmpl.kernel)
 		//	err = SaveImageAsPNG(edgeImg, "debug_template_edge.png")
 		//	test.That(t, err, test.ShouldBeNil)
 		//}
 	}
-	img, err := openImage("inputs/white_bg.png")
+	img, err := openImage("inputs/image_3.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
@@ -49,7 +49,7 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	//err = SaveImageAsPNG(edgeImg2, "debug_edge_matrix.png") //save edge matrix for debugging
 	//test.That(t, err, test.ShouldBeNil)
 
-	detections := findTriangles(templates, imgMatrix, 2, 0.65, scale)
+	detections := findTriangles(templates, imgMatrix, 2, 0.75, scale)
 
 	//drawing detections on image
 	rgbaImg := image.NewRGBA(img.Bounds())
@@ -62,7 +62,7 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 
 	//verify number of detections
-	test.That(t, len(detections), test.ShouldEqual, 3)
+	test.That(t, len(detections), test.ShouldEqual, 5)
 }
 
 func BenchmarkTriangls(t *testing.B) {
@@ -95,13 +95,14 @@ func TestTemplateResizing(t *testing.T) {
 	t.Logf("Original template size: %v", originalSize)
 
 	// Create scaled template image
-	template, err := NewTemplateFromImage(img, 0.8)
+	scale := 0.5
+	template, err := NewTemplateFromImage(img, scale)
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, template.originalSize, test.ShouldResemble, originalSize)
 
 	// Verify kernel dimensions are scaled correctly
-	expectedWidth := int(float64(originalSize.X) * 0.8)
-	expectedHeight := int(float64(originalSize.Y) * 0.8)
+	expectedWidth := (int(float64(originalSize.X)*scale) + 2*template.padding) // testing padded size
+	expectedHeight := int(float64(originalSize.Y)*scale) + 2*template.padding
 	test.That(t, template.kernelWidth, test.ShouldEqual, expectedWidth)
 	test.That(t, template.kernelHeight, test.ShouldEqual, expectedHeight)
 }
