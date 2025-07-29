@@ -28,6 +28,8 @@ func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 
 	templates := []TemplateFromImage{}
 
+	scales := []float64{scale * 0.75, scale, scale * 1.25} // create copies of each template at 75%, 100%, 125% of base scale
+
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -57,11 +59,13 @@ func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 			return nil, fmt.Errorf("error decoding image (%s): %v", filename, err)
 		}
 
-		template, err := NewTemplateFromImage(img, scale)
-		if err != nil {
-			return nil, fmt.Errorf("cannot create template from [%s]: %w", filename, err)
+		for _, scale := range scales {
+			template, err := NewTemplateFromImage(img, scale)
+			if err != nil {
+				return nil, fmt.Errorf("cannot create template from [%s] at scale %f: %w", filename, scale, err)
+			}
+			templates = append(templates, *template)
 		}
-		templates = append(templates, *template)
 	}
 	return templates, nil
 }
@@ -125,7 +129,7 @@ func findTriangles(templates []TemplateFromImage, imgMatrix [][]float64, stride 
 	// Convert matches to detections
 	detections := make([]objdet.Detection, 0, len(allMatches))
 	for _, match := range allMatches {
-		box := match.GetBoundingBox()
+		box := match.GetBoundingBox() // adding padding to the bounding box
 		det := objdet.NewDetectionWithoutImgBounds(box, float64(match.Score), "triangle")
 		detections = append(detections, det)
 	}
