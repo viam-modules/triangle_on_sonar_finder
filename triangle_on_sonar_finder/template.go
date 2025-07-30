@@ -18,18 +18,20 @@ import (
 
 // TemplateFromImage represents a template created from an image
 type TemplateFromImage struct {
-	kernel       [][]float64
-	kernelWidth  int
-	kernelHeight int
-	sumKernel    float32
-	originalSize image.Point
-	padding      int
+	kernel         [][]float64
+	kernelWidth    int
+	kernelHeight   int
+	sumKernel      float32
+	originalWidth  int
+	originalHeight int
+	padding        int
 }
 
 // NewTemplateFromImage creates a new template from an image file (including preprocessing steps)
 func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, error) {
-	originalSize := image.Point{X: img.Bounds().Dx(), Y: img.Bounds().Dy()}
-	resizedWidth := uint(float64(originalSize.X) * scale) // finding new width using same scale as img for resizing
+	originalWidth := img.Bounds().Dx()
+	originalHeight := img.Bounds().Dy()
+	resizedWidth := uint(float64(originalWidth) * scale) // finding new width using same scale as img for resizing
 	// step 1: resize template proportionally to how we resize input image
 	img = resizeImage(img, resizedWidth)
 
@@ -92,12 +94,13 @@ func NewTemplateFromImage(img image.Image, scale float64) (*TemplateFromImage, e
 	}
 
 	return &TemplateFromImage{
-		kernel:       edgeKernel,
-		kernelWidth:  width,
-		kernelHeight: height,
-		sumKernel:    sumKernel,
-		originalSize: originalSize,
-		padding:      padding,
+		kernel:         edgeKernel,
+		kernelWidth:    width,
+		kernelHeight:   height,
+		sumKernel:      sumKernel,
+		originalWidth:  originalWidth,
+		originalHeight: originalHeight,
+		padding:        padding,
 	}, nil
 }
 
@@ -141,8 +144,8 @@ func (t *TemplateFromImage) FindMatch(image [][]float64, stride int, threshold f
 					matches = append(matches, Match{
 						X:      int(float64(j+t.padding) * 1 / scale),
 						Y:      int(float64(i+t.padding) * 1 / scale),
-						Width:  t.originalSize.X,
-						Height: t.originalSize.Y,
+						Width:  t.originalWidth,
+						Height: t.originalHeight,
 						Score:  corr,
 					})
 				}

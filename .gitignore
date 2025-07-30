@@ -2,3 +2,5 @@
 1.23.8
 bin/
 /debug
+module.tar.gz
+triangle_finder

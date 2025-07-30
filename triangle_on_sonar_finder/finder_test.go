@@ -31,8 +31,8 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	test.That(t, len(templates), test.ShouldEqual, 15)
 
 	for i, tmpl := range templates {
-		t.Logf("Template %d: Original size: %v, Resized size: %dx%d, Padding: %d",
-			i, tmpl.originalSize, tmpl.kernelWidth, tmpl.kernelHeight, tmpl.padding)
+		t.Logf("Template %d: width: %v, height: %v, resized width: %v, resized height: %v, padding: %d",
+			i, tmpl.originalWidth, tmpl.originalHeight, tmpl.kernelWidth, tmpl.kernelHeight, tmpl.padding)
 		//if i == 4 { // save preprocessed template for debugging
 		//	edgeImg := EdgeMatrixToGrayImage(tmpl.kernel)
 		//	err = SaveImageAsPNG(edgeImg, "debug_template_edge.png")
@@ -69,9 +69,9 @@ func BenchmarkTriangls(t *testing.B) {
 	scale := 0.5
 	templates, err := loadTemplates(scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, len(templates), test.ShouldEqual, 13)
+	test.That(t, len(templates), test.ShouldEqual, 15)
 
-	img, err := openImage("inputs/white_bg.png")
+	img, err := openImage("inputs/image_1.png")
 	test.That(t, err, test.ShouldBeNil)
 	test.That(t, img.Bounds().Empty(), test.ShouldBeFalse)
 
@@ -79,8 +79,8 @@ func BenchmarkTriangls(t *testing.B) {
 
 	for t.Loop() {
 		imgMatrix := ImageToMatrix(img, scale)
-		detections := findTriangles(templates, imgMatrix, 2, .65, scale)
-		test.That(t, len(detections), test.ShouldEqual, 3)
+		detections := findTriangles(templates, imgMatrix, 2, .75, scale)
+		test.That(t, len(detections), test.ShouldEqual, 5)
 	}
 
 }
@@ -98,7 +98,8 @@ func TestTemplateResizing(t *testing.T) {
 	scale := 0.5
 	template, err := NewTemplateFromImage(img, scale)
 	test.That(t, err, test.ShouldBeNil)
-	test.That(t, template.originalSize, test.ShouldResemble, originalSize)
+	test.That(t, template.originalWidth, test.ShouldResemble, originalSize.X)
+	test.That(t, template.originalHeight, test.ShouldResemble, originalSize.Y)
 
 	// Verify kernel dimensions are scaled correctly
 	expectedWidth := (int(float64(originalSize.X)*scale) + 2*template.padding) // testing padded size
@@ -138,7 +139,7 @@ func TestCoordinateScaling(t *testing.T) {
 		// check if this detection matches any template size
 		foundMatchingTemplate := false
 		for _, template := range templates {
-			if boxWidth == template.originalSize.X && boxHeight == template.originalSize.Y {
+			if boxWidth == template.originalWidth && boxHeight == template.originalHeight {
 				foundMatchingTemplate = true
 				break
 			}
