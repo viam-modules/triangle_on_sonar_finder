@@ -12,7 +12,7 @@ edit this and change the path:
 {
   "camera_name": "camera-1",
   "path_to_templates_directory": "/path/to/templates",
-  "threshold": 0.65,
+  "threshold": 0.75,
   "scale (optional)": 0.5
 }
 ```
