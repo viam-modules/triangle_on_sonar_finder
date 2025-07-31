@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 
@@ -48,7 +48,7 @@ func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 			continue
 		}
 
-		f, err := templateFS.Open(filepath.Join("templates", filename))
+		f, err := templateFS.Open(path.Join("templates", filename))
 		if err != nil {
 			return nil, fmt.Errorf("cannot open file [%s]: %w", filename, err)
 		}
