@@ -44,8 +44,8 @@ type TriangleFinderConfig struct {
 }
 
 // TODO: implement Validate
-func (cfg TriangleFinderConfig) Validate(path string) ([]string, error) {
-	return []string{cfg.Camera}, nil
+func (cfg TriangleFinderConfig) Validate(path string) ([]string, []string, error) {
+	return []string{cfg.Camera}, []string{}, nil
 }
 
 type myTriangleFinder struct {
@@ -115,8 +115,7 @@ func (tf *myTriangleFinder) DetectionsFromCamera(
 	cameraName string,
 	extra map[string]interface{},
 ) ([]objdet.Detection, error) {
-	mimeType := "image/jpeg"
-	image, err := camera.DecodeImageFromCamera(ctx, mimeType, nil, tf.cam)
+	image, err := camera.DecodeImageFromCamera(ctx, tf.cam, nil, nil)
 	if err != nil {
 		return nil, errors.Errorf("failed to get and decode image for %s got: %s", ModelName, err)
 	}
@@ -161,8 +160,7 @@ func (tf *myTriangleFinder) CaptureAllFromCamera(
 	extra map[string]interface{},
 ) (viscapture.VisCapture, error) {
 	res := viscapture.VisCapture{}
-	mimeType := "image/jpeg"
-	image, err := camera.DecodeImageFromCamera(ctx, mimeType, nil, tf.cam)
+	image, err := camera.DecodeImageFromCamera(ctx, tf.cam, nil, nil)
 	if err != nil {
 		return viscapture.VisCapture{}, errors.Errorf("failed to get image from camera for %s got: %s", ModelName, err)
 	}
