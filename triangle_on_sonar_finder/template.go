@@ -243,7 +243,7 @@ func SaveImageAsPNG(img image.Image, filename string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return png.Encode(f, img)
 }
 func DrawBoundingBox(img draw.Image, rect image.Rectangle, col color.Color, thickness int, score float32) {

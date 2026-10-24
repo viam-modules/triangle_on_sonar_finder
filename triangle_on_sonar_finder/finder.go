@@ -72,7 +72,7 @@ func newTriangleFinder(ctx context.Context, deps resource.Dependencies, conf res
 		scale:  getScaleOrDefault(newConf.Scale),
 	}
 	// get camera
-	tf.cam, err = camera.FromDependencies(deps, newConf.Camera)
+	tf.cam, err = camera.FromProvider(deps, newConf.Camera)
 	if err != nil {
 		return nil, errors.Errorf("failed to get camera from dependencies for %s got: %s", ModelName, err)
 	}

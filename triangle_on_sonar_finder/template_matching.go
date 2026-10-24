@@ -52,7 +52,7 @@ func loadTemplates(scale float64) ([]TemplateFromImage, error) {
 		if err != nil {
 			return nil, fmt.Errorf("cannot open file [%s]: %w", filename, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 
 		img, _, err := image.Decode(f)
 		if err != nil {
