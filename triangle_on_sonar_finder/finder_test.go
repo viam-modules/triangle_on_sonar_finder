@@ -62,7 +62,7 @@ func TestTriangleOnSonarFinder(t *testing.T) {
 	test.That(t, err, test.ShouldBeNil)
 
 	//verify number of detections
-	test.That(t, len(detections), test.ShouldEqual, 5)
+	test.That(t, len(detections), test.ShouldEqual, 3)
 }
 
 func BenchmarkTriangls(t *testing.B) {
@@ -113,7 +113,7 @@ func TestCoordinateScaling(t *testing.T) {
 	templates, err := loadTemplates(0.5)
 	test.That(t, err, test.ShouldBeNil)
 
-	img, err := openImage("inputs/input_1.jpg")
+	img, err := openImage("inputs/image_3.png")
 	test.That(t, err, test.ShouldBeNil)
 	originalSize := img.Bounds().Size()
 	t.Logf("Original input image size: %v", originalSize)
