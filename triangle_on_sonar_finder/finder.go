@@ -3,15 +3,15 @@ package triangle_on_sonar_finder
 import (
 	"context"
 
-	"image"
-
 	"github.com/pkg/errors"
 	"go.viam.com/rdk/components/camera"
+	"go.viam.com/rdk/data"
 	"go.viam.com/rdk/logging"
 	"go.viam.com/rdk/resource"
 	"go.viam.com/rdk/services/vision"
 	vis "go.viam.com/rdk/vision"
 	"go.viam.com/rdk/vision/classification"
+	"go.viam.com/rdk/vision/detection3d"
 	objdet "go.viam.com/rdk/vision/objectdetection"
 	"go.viam.com/rdk/vision/viscapture"
 )
@@ -124,13 +124,16 @@ func (tf *myTriangleFinder) DetectionsFromCamera(
 	return tf.findTriangles(imgMatrix), nil
 }
 
-func (tf *myTriangleFinder) Detections(ctx context.Context, img image.Image, extra map[string]interface{}) ([]objdet.Detection, error) {
-	// Convert image to grayscale
-	mat := ImageToMatrix(img, tf.scale)
+func (tf *myTriangleFinder) Detections(ctx context.Context, img *camera.NamedImage, extra map[string]interface{}) ([]objdet.Detection, error) {
+	rawImg, err := img.Image(ctx)
+	if err != nil {
+		return nil, errors.Errorf("failed to get image for %s got: %s", ModelName, err)
+	}
+	mat := ImageToMatrix(rawImg, tf.scale)
 	return tf.findTriangles(mat), nil
 }
 
-func (tf *myTriangleFinder) Classifications(ctx context.Context, img image.Image,
+func (tf *myTriangleFinder) Classifications(ctx context.Context, img *camera.NamedImage,
 	n int, extra map[string]interface{},
 ) (classification.Classifications, error) {
 	return nil, errUnimplemented
@@ -142,6 +145,14 @@ func (tf *myTriangleFinder) ClassificationsFromCamera(
 	n int,
 	extra map[string]interface{},
 ) (classification.Classifications, error) {
+	return nil, errUnimplemented
+}
+
+func (tf *myTriangleFinder) GetDetections3D(
+	ctx context.Context,
+	cameraName string,
+	extra map[string]interface{},
+) ([]*detection3d.Detection, error) {
 	return nil, errUnimplemented
 }
 
@@ -160,21 +171,29 @@ func (tf *myTriangleFinder) CaptureAllFromCamera(
 	extra map[string]interface{},
 ) (viscapture.VisCapture, error) {
 	res := viscapture.VisCapture{}
-	image, err := camera.DecodeImageFromCamera(ctx, tf.cam, nil, nil)
+	rawImage, err := camera.DecodeImageFromCamera(ctx, tf.cam, nil, nil)
 	if err != nil {
 		return viscapture.VisCapture{}, errors.Errorf("failed to get image from camera for %s got: %s", ModelName, err)
 	}
+	namedImg, err := camera.NamedImageFromImage(rawImage, "", "", data.Annotations{})
+	if err != nil {
+		return viscapture.VisCapture{}, errors.Errorf("failed to construct named image for %s got: %s", ModelName, err)
+	}
 	if opt.ReturnImage {
-		res.Image = image
+		res.Image = &namedImg
 	}
 	if opt.ReturnDetections {
-		dets, err := tf.Detections(ctx, image, extra)
+		dets, err := tf.Detections(ctx, &namedImg, extra)
 		if err != nil {
 			return viscapture.VisCapture{}, errors.Errorf("failed to get detections from camera for %s got: %s", ModelName, err)
 		}
 		res.Detections = dets
 	}
 	return res, nil
+}
+
+func (tf *myTriangleFinder) Status(ctx context.Context) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
 }
 
 func (tf *myTriangleFinder) DoCommand(ctx context.Context, cmd map[string]interface{}) (map[string]interface{}, error) {
